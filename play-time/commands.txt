@@ -24,6 +24,21 @@ kubectl scale --replicas=3 -f replicaset-definition.yaml
 
 kubectl edit rs new-replica-set
 
+specify namespace with creating pod:
+
+kubectl create namespace dev
+
+kubectl create -f pod-definition.yml --namespace=dev
+
+kubectl get pods --namespace=dev
+
+Switch to another namespace:
+kubectl config set-context $(kubectl config current-context) --namespace=dev
+
+View pods in all namespaces:
+kubectl get pods --all-namespaces
+
+
 
 
 
