@@ -1,0 +1,63 @@
+kubectl create -f pod-definition.yml
+
+Kevins-MacBook-Air:play-time kwood$ kubectl get pods
+NAME                    READY   STATUS    RESTARTS      AGE
+myapp-pod               1/1     Running   0             8s
+nginx-55f598f8d-h9md4   1/1     Running   1 (47m ago)   32d
+
+kubectl describe pod myapp-pod
+
+
+evins-MacBook-Air:play-time kwood$ kubectl get replicationcontroller
+NAME       DESIRED   CURRENT   READY   AGE
+myapp-rc   3         3         3       49s
+
+
+kubectl replace -f replicaset-definition.yaml
+
+Kevins-MacBook-Air:play-time kwood$ kubectl get replicaset
+NAME               DESIRED   CURRENT   READY   AGE
+myapp-replicaset   6         6         6       5m55s
+
+kubectl scale --replicas=3 replicaset myapp-replicaset
+kubectl scale --replicas=3 -f replicaset-definition.yaml
+
+kubectl edit rs new-replica-set
+
+
+
+
+
+https://kubernetes.io/docs/reference/kubectl/conventions/
+
+Create an NGINX Pod
+
+kubectl run nginx --image=nginx
+
+Generate POD Manifest YAML file (-o yaml). Don't create it(--dry-run)
+
+kubectl run nginx --image=nginx --dry-run=client -o yaml
+
+Create a deployment
+
+kubectl create deployment --image=nginx nginx
+
+Generate Deployment YAML file (-o yaml). Don't create it(--dry-run)
+
+kubectl create deployment --image=nginx nginx --dry-run=client -o yaml
+
+Generate Deployment YAML file (-o yaml). Don’t create it(–dry-run) and save it to a file.
+
+kubectl create deployment --image=nginx nginx --dry-run=client -o yaml > nginx-deployment.yaml
+
+Make necessary changes to the file (for example, adding more replicas) and then create the deployment.
+
+kubectl create -f nginx-deployment.yaml
+
+
+
+OR
+
+In k8s version 1.19+, we can specify the --replicas option to create a deployment with 4 replicas.
+
+kubectl create deployment --image=nginx nginx --replicas=4 --dry-run=client -o yaml > nginx-deployment.yaml
