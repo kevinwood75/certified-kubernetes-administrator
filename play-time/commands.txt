@@ -1,3 +1,8 @@
+kubernetes documentation:
+https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes-using-node-affinity/
+
+
+
 kubectl create -f pod-definition.yml
 
 Kevins-MacBook-Air:play-time kwood$ kubectl get pods
@@ -205,3 +210,387 @@ tolerations:
 
 to see the tain on the master node
 kubectl describe node kubemastrer | grep Taint
+
+Scheduler:
+
+you can specify nodeName to tell pod where to run if no scheduler
+pod-def.yaml add nodeName: host to spec section
+
+other option when no scheduler:
+
+create a pod-bind-definition.yaml:
+apiVersion: v1
+kind: Binding
+metadata:
+  name: nginx
+target:
+  apiVersion: v1
+  kind: Node
+  name: node02
+
+
+  conver the yaml to json format and send to apiVersion
+  curl --header "Content-Type:application/json" --request POST --data '{}' http://$SERVER/api/v1/namespaces/default/pods/$PODNAME/binding/
+
+
+  Node Selectors
+  poddef.yaml in spec section:
+  nodeSelector:
+    size: Large
+
+  Labelnodes:
+  kubectl label node <node-name>  size=Large
+
+  kubectl create deployment blue --image=nginx --replicas=3
+
+Check for taints:
+
+kubectl describe node node01 | grep Taints
+
+Edit a deployment:
+
+kubectl edit deployment deploymentname
+
+create yaml for a delpoyment:
+kubectl create deployment red --image=nginx --replicas=2 --dry-run=client -o yaml > red.yaml
+
+
+
+  NODE AFFINITY
+  pod-def.yaml  spec section:
+
+  affinity:
+   nodeAffinity:
+     requiredDuringScheduleingIgnoreDuringExecution:
+       nodeSelectorTerms:
+       - matchExpressions:
+         - key: size
+           operator: In or NotIn or Exists
+           values:
+           - Large
+
+Resource Requirements and Limits:
+
+resources:
+  requests:
+    memory: "4Gi"
+    cpu: 2
+
+1 cpu count is the same as AWS vCPU or GCP/Azure core , hyperthread
+
+1 K(Kilobyte) = 1,000 byte
+1 Ki(Kibibyte) = 1,024 byte
+
+Limit Ranges,
+
+sets global resource limits for all containers if none are sepecified at namespace level
+
+limit-range-cpu.yaml
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: cpu-resource-constraint
+spec:
+  limits:
+  - default:
+      cpu: 500m
+    defaultRequest:
+      cpu: 500m
+    max:
+      cpu: "1"
+    min:
+      cpu: 100m
+    type: Container
+
+limit-range-memory.yaml
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: memory-resource-constraint
+spec:
+  limits:
+  - default:
+      memory: 1Gi
+    defaultRequest:
+      memory: 1Gi
+    max:
+      memory: 1Gi
+    min:
+      memory: 500Mi
+    type: Container
+
+Creating resource Quotas at a namespace level:
+ResourceQuota -> is a namespace object
+
+resource-quota.yaml
+
+apiVersion: v1
+kind: ResourceQuota
+metadata
+  name: my-resource-quota
+spec:
+  hard:
+    requests.cpu: 4
+    requests.memory: 4Gi
+    limits.cpu: 10
+    limits.memory: 10Gi
+
+    Manage Memory,CPU and API Resources:
+    https://kubernetes.io/docs/tasks/administer-cluster/manage-resources/
+
+    LimitRange for CPU:
+    https://kubernetes.io/docs/tasks/administer-cluster/manage-resources/cpu-default-namespace/
+
+    LimitRange for Memory:
+    https://kubernetes.io/docs/tasks/administer-cluster/manage-resources/memory-default-namespace/
+
+Remember, you CANNOT edit specifications of an existing POD other than the below.
+
+spec.containers[*].image
+
+spec.initContainers[*].image
+
+spec.activeDeadlineSeconds
+
+spec.tolerations
+
+
+With Deployments you can easily edit any field/property of the POD template. Since the pod template
+ is a child of the deployment specification,  with every change the deployment will automatically 
+ delete and create a new pod with the new changes. So if you are asked to edit a property of a POD 
+ part of a deployment you may do that simply by running the command
+
+
+
+
+Daemon Sets: 
+
+are like replicas but it runs one pod on each node of your cluster. when a new node is added to cluster
+a pod is automatically spun up on new node.
+
+Use cases of Daemon sets
+- Monitoring Solution
+- Logs Viewer
+
+
+Creating a DaemonSet definition
+
+daemon-set-definition.yaml
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: monitoring-daemon
+spec:
+  selector:
+     matchLabels:
+       app: monitoring-agent
+  template:
+     metadata:
+       labels:
+         app: monitoring-agent
+     spec:
+       containers:
+       - name: monitoring-agent
+         image: monitoring-agent
+
+kubectl get daemonsets --all-namespaces
+
+
+Static pods:
+
+These are pods are created on worker node only. by adding pod definition file to /etc/kubernetes/manifests directory.  
+Kubelet reads this directory and creates pods based on definition files found automatically
+/etc/kubernetes/manifests is passed when service starts using --pod-manifest-path=path
+
+--config can be pointed ata config file also
+
+kubeconfig.yaml
+staticPodPath: /etc/kubernetes/manifests
+
+kubectl get pods -A --no-headers | awk '{print $2 " -n " $1 "\n"}' | xargs --max-lines=1 kubectl describe pods | grep "Controlled By:  Node/controlplane" | wc -l
+
+kubectl get pods -A --no-headers | awk '{print $2 " -n " $1 "\n"}' | xargs --verbose --max-lines=1 kubectl describe pods | grep "Controlled By:  Node/controlplane"
+
+kubectl get pods --all-namespaces -o json | jq -r '.items | map(select(.metadata.ownerReferences[]?.kind == "Node" ) | .metadata.name) | .[]'
+
+
+
+
+Scheduler:
+
+kubectl get serviceaccount -n kube-system
+kubectl get clusterrolebinding
+
+https://github.com/kubernetes/community/blob/master/contributors/devel/sig-scheduling/scheduling_code_hierarchy_overview.md
+
+https://kubernetes.io/blog/2017/03/advanced-scheduling-in-kubernetes/
+
+https://jvns.ca/blog/2017/07/27/how-does-the-kubernetes-scheduler-work/
+
+https://stackoverflow.com/questions/28857993/how-does-kubernetes-scheduler-work
+
+
+
+Logging and monitoring
+
+Metrics SERVER
+kubectl top node
+
+Kevins-MacBook-Air:cmd kwood$ kubectl top pod
+NAME                     CPU(cores)   MEMORY(bytes)   
+myapp-replicaset-g6zk9   0m           2Mi             
+myapp-replicaset-lr5lm   0m           2Mi             
+nginx                    0m           2Mi             
+nginx-55f598f8d-h9md4    0m           2Mi     
+
+
+deploy metrics server:
+
+git clone https://github.com/kodekloudhub/kubernetes-metrics-server.git
+
+
+viewing logs of a running pod:
+
+kubectl logs -f pod_name container_name
+
+
+###########Application Lifecycle Management###############
+
+kubectl rollout status deployment/myapp-deployment  -> look at rollout
+
+kubectl rollout history deployment/myapp-deployment
+
+
+Deployment stategies:
+recreate: teardown and build new
+rolling update: takedown and build one at a time in a rolling fashion
+
+During a rolling update deployment it will create a new replica set spinning down old and spinning up in new.
+
+
+undo and upgrade:
+kubectl rollout undo deployment/myapp-deployment -> destroys pods in new replica set and brings the old one up.
+
+
+kubectl create -f deployment-definition.yaml
+kubectl get deployments
+kubectl apply -f deployment-definition.yaml
+kubectl set image deployment/myapp-deployment nginx=nginx:1.9.1  -> nginx is the container name
+kubectl rollout status deployment/myapp-deployment
+kubectl rollout history deployment/myapp-deployment
+kubectl rollout undo deployment/myapp-deployment
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: default
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      name: webapp
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        name: webapp
+    spec:
+      containers:
+      - image: kodekloud/webapp-color:v2
+        name: simple-webapp
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+
+
+commands in containers docker:
+
+docker run ubuntu   -> start ubuntu container then exits
+docker ps -a -> lists all containers even the stopped ones.
+
+Dockerfile:
+run directive defines program that will run in container
+CMD ["nginx"]
+
+by default a terminal is not attached when a command is range
+
+specify a command to run:
+docker run ubuntu sleep 5
+
+CMD ["command", "param1"]  -> command line replaced defined CMD
+
+ENTRYPOINT instruction specifys what program will be run at start and what ever you specify at command line will be a 
+paramater
+
+FROM ubuntu
+ENTRYPOINT ["sleep"]
+CMD ["5]  -> define default sleep time if one is not specified in commandline
+
+doecker run ubuntu-sleeper 10
+
+
+you can override cmd in command line:
+docker run --entrypoint sleep2.0 ubuntu-sleeper 10
+
+
+create a pod with container(append args of container in pod)
+pod-definition.yml
+
+apiVersion: v1
+kind: Pod
+metadata:
+ name: ubuntu-sleeper-pod
+spec: 
+ containers:
+   - name: ubuntu-sleeper
+     image: ubuntu-sleeper
+     command: ["sleep2.0"]   --> overwrites the ENTRYPOINT
+     args: ["10"]
+
+
+Configmap:
+
+kubectl create configmap <config-name> --from-literal=<key>=<value>
+
+kubectl create configmap \
+    app-config --from-literal=APP_COLOR=blue \
+               --from-literal=APP_MOD=prod
+
+
+kubectl create configmap
+    <config-name> --from-file=<path-to-file>
+
+
+config-map.yaml
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  APP_COLOR: blue
+  APP_MODE: prod
+
+
+kubectl get configmaps
+kubectl describe configmaps
+
+using configmap in pod-definition file under container section
+
+envFrom: 
+  - configMapRef:
+        name: app-config
+
+        
+    
+
+
+
+
