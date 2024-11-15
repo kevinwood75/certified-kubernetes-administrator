@@ -1,6 +1,9 @@
+
+
 kubernetes documentation:
 https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes-using-node-affinity/
 
+https://kubernetes.io/docs/home/
 
 
 kubectl create -f pod-definition.yml
@@ -1478,6 +1481,230 @@ Overlay
 Overlay2
 
 Default storage driver depends on OS its running on.
+
+
+###Adding volume to pod###
+apiVersion: v1
+kind: Pod
+metadata:
+  name: random-number-generator
+spec:
+  containers:
+  - image: alpine
+    name: alpine
+    command: [ "/bin/sh", "-c" ]
+    args: ["shuf -i 0-100 -n 1 >> /opt/numbers.out;"]
+    volumeMounts:
+    - mountPath: /opt
+      name: data-volume
+
+  volumes:
+  - name: data-volume
+    hostPath:   -> works on a single node but not multi host cluster
+       path: /data
+       type: Directory
+
+using amazon elastic storage:
+volumes:
+- name: data-volume
+  awsElasticBlockStore
+    volumeID:  <volume-id.
+    fstype: ext4
+
+
+
+Kubernetes supported cluster solutions:
+NFS
+GlusterFS
+Flocker
+ceph
+SCALEIO
+etc..
+
+####Persisent volumes kubernetes####
+
+----pv-definition.yaml-----
+apiVersion: v1
+kind: persistentvolume
+metadata:
+  name: pv-vol1
+
+spec:
+  accessModes:
+      - ReadWriteOnce
+  capacity:
+      storage: 1Gi
+
+
+Persistent Volume Claims and Persistent Volumes are 2 seperate objects.
+
+pvc-definition.yaml
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: myclaim
+spec:
+  accessModes:
+     - ReadWriteOnce
+  resources:
+     requests:
+       storage: 500Mi
+
+kubectl create -f pvc-definition.yaml
+
+
+View claims:
+
+kubectl get persistentvolumeclaim
+
+kubectl delete persistentvolumeclaim myclaim
+
+- when claimm in deleted it will retain the persistent volume by default. 
+- you can change the behavior by adding "persistentVolumeReclaimPolicy: Delete" Recycle scrubs the data .
+
+Using PVCs in Pods
+Once you create a PVC use it in a POD definition file by specifying the PVC Claim name under persistentVolumeClaim section in the volumes section like this:
+
+
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mypod
+spec:
+  containers:
+    - name: myfrontend
+      image: nginx
+      volumeMounts:
+      - mountPath: "/var/www/html"
+        name: mypd
+  volumes:
+    - name: mypd
+      persistentVolumeClaim:
+        claimName: myclaim
+
+
+The same is true for ReplicaSets or Deployments. Add this to the pod template section of a Deployment on ReplicaSet.
+
+
+
+Reference URL: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#claims-as-volumes
+
+
+kubectl exec webapp -- cat /log/app.log  -> view logs on pod
+
+     - mountPath: /log
+        name: log-volume
+
+    - name: log-volume
+      hostPath:
+         path: /var/log/webapp
+    
+
+k replace --force -f webapp.yaml -> delete and recreat pod
+
+access modes have to be the same in pv and pvc.
+
+#### pv.yaml ####################
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-log
+spec:
+  capacity:
+    storage: 100Mi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /pv/log
+#############################
+
+#######pvc.yaml#########################
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: claim-log-1
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Mi
+######################################
+k replace --force -f pvc.yaml
+
+
+Storage Classes:
+
+Statis Provisioning:
+1) create volume/disk in google cloud
+2) create pv definition using the google cloud volume
+
+ 
+Dynamic Provisioning - Storage classes are used
+
+Create a Storage class definition: (only pvc definition is required.  sc creates the pv)
+#########sc-definition.yaml#######################
+apiVersion: storage.k8s.io/v1
+kind: storageclass
+metadata:
+   name: google-storage
+provisioner: kubernetes.io/gce-POD
+##################################################
+
+#########pvc-definition.yaml####################
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: myclaim
+
+spec:
+  accessModes:
+     - ReadWriteOnce
+  storageClassName: google-storage
+  resources:
+     requests:
+       storage: 500Mi
+################################################
+
+
+The Storage Class called local-storage makes use of VolumeBindingMode set to WaitForFirstConsumer. 
+This will delay the binding and provisioning of a PersistentVolume until a Pod using the PersistentVolumeClaim is created.
+
+
+
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: nginx
+  name: nginx
+spec:
+  containers:
+  - image: nginx:alpine
+    name: nginx
+    resources: {}
+    volumeMounts:
+      - mountPath: "/var/www/html"
+        name: local-pvc-volume
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+  volumes:
+  - name: local-pvc-volume
+    persistentVolumeClaim:
+        claimName: locall-pvc
+status: {}
+
+
+
+
+
+
+
+
 
 
 
