@@ -1698,11 +1698,445 @@ spec:
         claimName: locall-pvc
 status: {}
 
+Networking:
+
+Switch routing:::
+ip link  -> list interfaces
+ip addr  -> see the ip on those interfaces
+ip addr add 192.168.1.0/24 dev eth0   -> set ip on interfaces
+ip route - see routing table
+ip route add 192.168.1.0/24 via 192.168.2.1
+cat /proc/sys/net/ipv4/ip_forward
+
+
+DNS:
+
+CoreDNS also supports other ways of configuring DNS entries through plugins. We will look at the plugin that it uses for Kubernetes in a later section.
+
+Read more about CoreDNS here:
+
+https://github.com/kubernetes/dns/blob/master/docs/specification.md
+
+https://coredns.io/plugins/kubernetes/
 
 
 
+#######Network namespaces###############
+
+namespaces are the romms in house .  isolates 
+
+To create a new network namespce on linux:
+ip netns add red
+ip netns add blue
+
+List namespaces:
+ip netns
+
+To see links inside namespace:
+ip netns exec red ip link
+ip -n red link
 
 
+arp table is isolated inside namespace:
+
+ip netns exec red  arp
+
+
+routing table is also isolated inside namespace:
+ip netns exec red route
+
+##############################################
+On creattion network namespaces have not connectiviy.  setting up connectivity:
+
+create a virtual link between the namespaces:
+ip link add veth-red type veth peer name veth-blue
+
+Next you have connect the link to interface:
+ip link set veth-red netns red
+ip link set venth-blue netns blue
+
+Next you can attache ip to these ns interfaces and bring them online:
+ip -n red addr add 192.168.15.1 dev veth-red
+ip -n blue addr add 192.168.15.2 dev veth-blue
+ip -n red link set veth-red up
+ip -n blue link set veth-blue up
+
+Now you can ping between namespaced     
+ip netns red ping 192.168.15.7
+if you look at arp table now you will see entries for 
+
+When you multiple interfaces inside namespace you need to creat a virtual network network 
+1) first create a Ns switch
+on parent OS:
+ip link add v-net-0 type bridge
+ip link set dev v-net-0
+
+
+creating link between network namespaces 
+
+ip link add veth-red type veth peer name veth-blue
+ip link set veth-red netns red
+ip link set veth-blue netns blue
+ip -n red addr add 192.168.15.1 dev veth-red
+ip -n blue addr add 192.168.15.2 dev veth-blue
+
+ip -n red link set veth-red up
+ip -n blue link set veth-blue up
+
+ip netns exec red ping 192.168.15.2
+
+ip netns exec red arp
+ip netns exec blue arp
+
+If you have more then one namespaces:
+
+
+####Linux Bridge#####
+ip link add v-net-0 type bridge
+ip link
+ip link set v-net-0 up
+
+Delete cable:  
+ip -n red link del veth-red  -> when you delete one end the other gets deleted automatically
+
+Commect cables to bridge:
+# ip link add veth-red type veth peer name veth-red-br 
+# ip link add veth-blue type veth peer name veth-blue-br
+
+Connect network ns to bridge
+
+ip link set veth-red netns red
+ip link set veth-red-br master v-net-0
+
+
+ip link set veth-blue netns blue
+ip link set veth-blue-br master v-net-0 
+
+assign ip:
+ip -n red addr add 192.168.15.1 dev veth-red
+ip -n blue addr add 192.168.15.2 dev veth-blue
+
+bring up interface:
+
+ip -n red link set veth-red up
+ip -n blue link set veth-blue up
+
+create a route so you can ping another host:
+ip netns exec blue ip route add 192.168.1.0/24 via 192.168.15.5
+
+you need nat for it to be able to talk to other host along with the route you created:
+iptables -t nat -A POSTROUTING -s 192.168.15.0/24 -j MASQUERADE
+
+
+Try to talk to internet from Ns
+ip netns exec blue ip route add default via 192.168.15.5
+
+
+Talk to app running on ns from outside:
+iptables -t nat -A PREROUTING --dport 80 --to-destination 192.168.15.2:80 -j DNAT 
+
+
+While testing the Network Namespaces, if you come across issues where you can't ping one namespace from the other, make sure you set the NETMASK while setting IP Address. ie: 192.168.1.10/24
+
+
+
+ip -n red addr add 192.168.1.10/24 dev veth-red
+
+
+
+Another thing to check is FirewallD/IP Table rules. Either add rules to IP Tables to allow traffic from one namespace to another. Or disable IP Tables all together (Only in a learning environment).
+
+
+####Docker Networking#####
+
+No networking:(nobody from outside world can reach it) no network
+docker run --network none nginx
+
+Host networking. use host networking:
+docker run --network host nginx (if you run the same command again it will not work as port is already in use)
+
+
+Bridge [internal private network is created that the docker containers connect to]
+
+docker network ls
+
+ip netns
+
+ip -n jkljkljsdfs[container]  addr  -> container network
+
+Docker has port mapping to allow ports to be accesses externally 
+docker run -p 8080:80 nginx  -> behind the scenes it creates a dnat iptables rule.
+You can see the nat rules:
+iptables -nvL -t nat
+
+
+CNI - Container Networking Interface: standards to write network plugins(scripts )
+
+Plugin(scripts network) available:
+Bridge
+vlan
+ipvlan
+macvlan
+windows
+dhcp
+host-local
+Flannel
+weaveworks
+
+
+
+Docker does not implment CNI  has own set of standards.   CNM(Container Network Model)
+
+
+Cluster Networking:
+kublets on worker nodes listen on port 10250
+services lissten on worker nodes port 30000-32767
+kube-api on master listens on port 6443
+kube-scheduler on master listens on port 10259
+kube-controller on master listens on port 10257
+etcd on master listens on 2379
+if multi master etcd also has process listening on 2380
+
+all this info found in kubernetes documentation
+
+
+An important tip about deploying Network Addons in a Kubernetes cluster.
+
+
+
+In the upcoming labs, we will work with Network Addons. This includes installing a network plugin in the cluster. While we have used weave-net as an example, please bear in mind that you can use any of the plugins which are described here:
+
+https://kubernetes.io/docs/concepts/cluster-administration/addons/
+
+https://kubernetes.io/docs/concepts/cluster-administration/networking/#how-to-implement-the-kubernetes-networking-model
+
+
+
+In the CKA exam, for a question that requires you to deploy a network addon, unless specifically directed, you may use any of the solutions described in the link above.
+
+
+
+However, the documentation currently does not contain a direct reference to the exact command to be used to deploy a third-party network addon.
+
+The links above redirect to third-party/vendor sites or GitHub repositories, which cannot be used in the exam. This has been intentionally done to keep the content in the Kubernetes documentation vendor-neutral.
+
+
+
+NOTE: In the official exam, all essential CNI deployment details will be provided.
+
+
+####What is the network interface configured for cluster connectivity on controlplane node(node-to-node)#########:
+kubectl get nodes -o wide  -> get ip on controlplane node
+ip addr -> look for what interface is using controlplane ip
+
+
+#####Find bridge interfqces on a host##################
+ip addr show type bridge
+
+
+Correct! That's because 2379 is the port of ETCD to which all control plane components connect to. 2380 is only for etcd 
+peer-to-peer connectivity. When you have multiple controlplane nodes. In this case we don't
+
+
+################POD Networking####################
+Networking Model:]
+1) Every POD should have an IP Address
+2) Every POD should be able to communicate with every other POD in the same node.
+3) Every POD should be able to communicate with every other POD on other nodes without nat
+
+CNI lets you run a network script everytime a pod is created(middleman):
+CNI calls a sript in the correct format
+
+CNI script:
+##############net-script.sh############
+ADD)
+# Create veth particular
+# Attach veth particular
+# Assign IP Address
+# Bring Up Interface
+DEL)
+# Delete veth pair
+#####################################
+
+- container Runtime on each node is responsible for cerating container
+- Looks in cni conf directory
+  /etc/cni/net.d/net-script.conflist
+- Looks in cni bin drirectory to find binary
+  /opt/cni/bin/net-script.sh
+
+- runs script with options
+  ./net-script.sh add <container> <namespace>
+
+
+########Container Networking Interface(CNI) in kubernetes#########
+
+Container runtime is responsible for the following:
+- Container Runtime must create network namespace
+- Identify network the container must attach to
+- Container Runtime to invoke Network Plugin(bridge) when container is added
+- Container Runtime to invoke Network Plugin(bridge) when cojntainer is Deleted.
+- JSON format of the Network Configuration
+
+Kubernetes container run times :  containerd and cri-object
+
+All plugins are installed under /opt/cni/bin
+Configs for plugins are under /etc/cni/net.d
+
+
+
+container runtime looks in /etc/cni/net.d to determine what plugin it should use.  If their are multiple it will use the first one listed
+in alphabetical order
+
+Example 10-bridge.conf  -> formating is defined by CNI standards
+{
+    "cniVersion": "0.2.0",
+    "name": "mysql"
+    "type": "bridge",
+    "bridge": "cni0",
+    "isGateway": true,
+    "ipMasq": true,
+    "ipam": {
+       "type": "host-local",
+       "subnet": "10.22.0.0/16",
+       "routes": [
+          {  "dst": "0.0.0.0/0"}
+       ]
+    }
+
+
+}
+
+
+Important Update: -
+
+Before going to the CNI weave lecture, we have an update for the Weave Net installation link. They have announced the end of service for Weave Cloud.
+
+To know more about this, read the blog from the link below: -
+
+https://www.weave.works/blog/weave-cloud-end-of-service
+
+As an impact, the old weave net installation link won’t work anymore: -
+
+kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
+
+Instead of that, use the below latest link to install the weave net: -
+
+kubectl apply -f https://github.com/weaveworks/weave/releases/download/v2.8.1/weave-daemonset-k8s.yaml
+
+Reference links: -
+
+https://www.weave.works/docs/net/latest/kubernetes/kube-addon/#-installation
+
+https://github.com/weaveworks/weave/releases
+
+
+###############################CNI Weave ####################################
+
+- weave deploys a agent/service on each node and they communicate with one another 
+
+- Deploy Weave on a kubernetes cluster:
+
+  Weave agents are installed as a daemonset on all nodes  using kubctl
+  kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
+   
+- you can see the weave agents/daemon set pods from controller:
+  kubectl get pods -n kube-system
+
+- get the logs from weave pod:
+  kubectl logs weave-net-5gcmb weave -n kube-system
+
+
+- where to find container runtime of kublet
+ps -ef | grep kublet   -> kublet process as a variable --container-runtime
+
+
+- what binary executable file will be run by kubelet after a container and namespave is created:
+lookin config  under "/etc/cni/net.d"  and type points to the executable.
+
+
+
+########IPAM(IP address management) CNI###########
+How is the bridge assigned a subnet and who detmines what ip is assigned to pods(no duplicate ip assigned)
+
+= manage ip with a local file on yeach node
+    ip = get_free_ip_from_host_local()
+
+cni module config has section for ipam: "/etc/cni/net.d/net-script.conf
+  "ipam": {
+      "type": "host-local",
+      "subnet": "10.244.0.0/16",
+      "routes": [
+         { "dst": "0.0.0.0/0" }
+      ]
+  }
+
+  ####How Weaveworks assigns/manages ip addesses######
+  By default weave uses subnet 10.32.0.0/12   (10.32.0.1 -> 10.47.255.254)
+  The peers split the ips up and each peer has a different range
+
+#### How many weave agents/peers are deployed in this cluster #####
+k get pods -n kube-system  -> tells how many weave agents/peers are deployed in cluster
+
+
+#### What is the POD IP address range configured by weave ? #############
+kubectl logs -n kube-system weave-net-ftrt -> look at logs of a deplyed weave pod "ipalloc-range:10.244.0.0/16 "
+
+#### What is the default gateway configureed on the PODs scheduled on node01 ######
+- easiet way to do this is just deploy a pod to node01 and look what derfault gateway is:
+1) kubectl run busybox --image=busybox --dry-run=client -o yaml -- sleep 1000 > busybox.yaml
+2) edit busybox.yaml and add "nodeName: node01" to "spec:" section
+3) kubectl apply -f busybox.yaml
+4) kubectl exec busybox -- netstat -rn   -> get default route for pod deployed on node01
+
+
+
+############################service networking ######################################
+
+
+service: clusterIP
+- service is used to make pod reachable feom other pod.
+- service is cluster wide and can be used from any node
+- service is only accessed from within cluster 
+
+
+service: Node port
+- can be accessed outside of cluster
+- exposes application port on all nodes in cluster
+
+
+* when new service is created kube-proxy gets into action and runs on every node. services are cluster wide
+* when service is created it gets assigned a ip and kube-proxy sets up forwarding rules on all nodes in cluster
+* kube-proxy can use userspace,iptables or ipvs to setup the forwarding rule for service ip:port
+* you can set what kube-proxy uses for forwarding. It will default to iptables if nothing is defined
+* the service ip used is determined by "kube-api-server --service-cluster-ip-range ipNet (default: 10.0.0.0/24)
+* ps aux | grep kube-api-server -> look to findout what service-cluster-ip-rangee is set to.
+
+
+* iptables -L -t nat -> see what iptable rules are put in place for service
+* cat /var/log/kube-proxy.log  -> you can see what its doing for service
+
+*****************What type of proxy is the kube-proxy configured to use?###################
+kubectl -n kube-system logs kube-proxy-rq2vb  -> look n logs of one of the proxy pods to get the type of proxy being used
+
+#################################Cluster DNS##############################################
+* whenever a service is created kube dns maps the name to ip
+* with in the cluster any pod can access the service using the name
+* if you are trying to talk to a serveice in a differnt namespace you need to specify that "curl http://web-service.apps"
+* curl curl htt://[Hostname].[namespace].[type].[root]
+* example: cutl http://web-service.apps.svc.cluster.local
+* names to ip are not automatically created for pods by default
+* for a pod the ip address is used in hostanme with "." replaced by "-"
+* example: curl http://10-244-2-5.apps.pod.cluster.local
+
+
+##################################Ho kubernets implements DNS #####################
+* use to be kube-dns but is core-dns now.
+* /etc/coredns/Corefile  -> pod dns needs to be enabled with a entrypoint.  file is passed in to pod as a configmap
+* kubectl get configmap -n kube-system
+* when you dploy coredns to cluster and service is created also.
+* kubectl get service -n kube-system  -> it will be called kube-dns
+* pods add the coredns service ip to /etc/resolv.conf
+* kublet takes care of setting up resolv.conf to core dns service
 
 
 
