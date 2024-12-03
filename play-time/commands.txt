@@ -2129,7 +2129,8 @@ kubectl -n kube-system logs kube-proxy-rq2vb  -> look n logs of one of the proxy
 * example: curl http://10-244-2-5.apps.pod.cluster.local
 
 
-##################################Ho kubernets implements DNS #####################
+
+##################################How kubernets implements DNS #####################
 * use to be kube-dns but is core-dns now.
 * /etc/coredns/Corefile  -> pod dns needs to be enabled with a entrypoint.  file is passed in to pod as a configmap
 * kubectl get configmap -n kube-system
@@ -2137,6 +2138,98 @@ kubectl -n kube-system logs kube-proxy-rq2vb  -> look n logs of one of the proxy
 * kubectl get service -n kube-system  -> it will be called kube-dns
 * pods add the coredns service ip to /etc/resolv.conf
 * kublet takes care of setting up resolv.conf to core dns service
+
+
+
+####################################ingress##########################################
+
+* incress is a loadbalancer in kubernets that you put between your node port service and outside. you have to expose
+* load balancing, ssl ,  etc..
+* ingress controller and iongress resources
+* kubernetes doees not come with a ingress controller by default
+* ingress controller solutions :  GCP GCE(loadbalancer),Nginx, contour,haproxy,traefik lstio
+* only GCE and nginx are being supported and maintained under kubernetes cluster.
+* ingress controller installed as a Deplopyment on kubernetes cluster.
+* create a config map object to pass err-log-path,keep-alive,ssl-protocols
+* config map makes it easy to change options in future
+* service to expose it as nodeport
+* service account foe auth and roles and permisions to access all the objects
+Create nginx ingress deployment
+***Ingress-wear.yaml*****
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: ingress-wear
+spec:
+ backend:
+     serviceName: wear-service
+     servicePort: 80
+*******************************
+
+create deployment: kubectl creste -f Ingress-wear.yaml
+
+* chieck ingress resources after deployment
+kubectl get ingress
+
+* use rules when you want to route traffic on different conditions
+
+
+******************ingress-wear-watch.yaml*******************
+apiVersion: extension/v1beta1
+kind: Ingress
+metadata:
+  name: ingress-wear-watch
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /wear
+        backend:
+          serviceName: wear-service
+          servicePort: 80
+
+      - path: /watch
+        backend:
+          serviceName: watch-service
+          servicePort: 80
+**********************************************************************
+kubectl describe ingress ingress-wear-watch
+
+
+      
+***** ingress to  route traffic by host:
+
+**************************ingress-wear-watch.yaml************************
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: ingress-wear-watch
+spec:
+
+ rules:
+ - host: wear.my-online-store.com
+   http:
+     paths:
+     - backend:
+         serviceName: wear-service
+         servicePort: 80
+ - host: watch.my-on
+   http:
+     paths:
+     - backend:
+         serviceName: watch-service
+         servicePort: 80
+
+*************************************************************************
+
+
+
+
+
+
+
+
+
 
 
 
