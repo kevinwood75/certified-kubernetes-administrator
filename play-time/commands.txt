@@ -2223,11 +2223,281 @@ spec:
 *************************************************************************
 
 
+Article: Ingress
+As we already discussed Ingress in our previous lecture. Here is an update.
+
+In this article, we will see what changes have been made in previous and current versions in Ingress.
+
+Like in apiVersion, serviceName and servicePort etc.
+
+
+Now, in k8s version 1.20+ we can create an Ingress resource from the imperative way like this:-
+
+Format - kubectl create ingress <ingress-name> --rule="host/path=service:port"
+
+Example - kubectl create ingress ingress-test --rule="wear.my-online-store.com/wear*=wear-service:80"
+
+Find more information and examples in the below reference link:-
+
+https://kubernetes.io/docs/reference/generated/kubectl/kubectl-commands#-em-ingress-em-
+
+References:-
+
+https://kubernetes.io/docs/concepts/services-networking/ingress
+
+https://kubernetes.io/docs/concepts/services-networking/ingress/#path-types
+
+
+
+Ingress - Annotations and rewrite-target
+Different ingress controllers have different options that can be used to customise the way it works. NGINX Ingress controller has many options that can be seen here. I would like to explain one such option that we will use in our labs. The Rewrite target option.
+
+
+
+Our watch app displays the video streaming webpage at http://<watch-service>:<port>/
+
+Our wear app displays the apparel webpage at http://<wear-service>:<port>/
+
+We must configure Ingress to achieve the below. When user visits the URL on the left, his request should be forwarded internally to the URL on the right. Note that the /watch and /wear URL path are what we configure on the ingress controller so we can forwarded users to the appropriate application in the backend. The applications don't have this URL/Path configured on them:
+
+http://<ingress-service>:<ingress-port>/watch --> http://<watch-service>:<port>/
+
+http://<ingress-service>:<ingress-port>/wear --> http://<wear-service>:<port>/
+
+
+
+Without the rewrite-target option, this is what would happen:
+
+http://<ingress-service>:<ingress-port>/watch --> http://<watch-service>:<port>/watch
+
+http://<ingress-service>:<ingress-port>/wear --> http://<wear-service>:<port>/wear
+
+
+
+Notice watch and wear at the end of the target URLs. The target applications are not configured with /watch or /wear paths. They are different applications built specifically for their purpose, so they don't expect /watch or /wear in the URLs. And as such the requests would fail and throw a 404 not found error.
+
+
+
+To fix that we want to "ReWrite" the URL when the request is passed on to the watch or wear applications. We don't want to pass in the same path that user typed in. So we specify the rewrite-target option. This rewrites the URL by replacing whatever is under rules->http->paths->path which happens to be /pay in this case with the value in rewrite-target. This works just like a search and replace function.
+
+For example: replace(path, rewrite-target)
+In our case: replace("/path","/")
+
+
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: test-ingress
+  namespace: critical-space
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /pay
+        backend:
+          serviceName: pay-service
+          servicePort: 8282
+
+
+In another example given here, this could also be:
+
+replace("/something(/|$)(.*)", "/$2")
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+  name: rewrite
+  namespace: default
+spec:
+  rules:
+  - host: rewrite.bar.com
+    http:
+      paths:
+      - backend:
+          serviceName: http-svc
+          servicePort: 80
+        path: /something(/|$)(.*)
+
+
+**create a ingress gateway using cli
+*kubectl create  ingress ingress-pay -n critical-space --rule="/pay=pay-service:8282"
+
+** add anotation ingress controller to rewrite url
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  creationTimestamp: "2024-12-07T20:19:30Z"
+  generation: 1
+  name: ingress-pay
+  namespace: critical-space
+  resourceVersion: "4401"
+  uid: 9b8c0d3e-e86b-4609-b2bd-03e09f09e6b3
+spec:
+  rules:
+  - http:
+      paths:
+      - backend:
+          service:
+            name: pay-service
+            port:
+              number: 8282
+        path: /pay
+        pathType: Exact
+status:
+  loadBalancer:
+    ingress:
+    - ip: 172.20.128.36
+
+
+*******exposing ingress controller (nodePort cannot be specified. need to be specified after its created)
+kubectl expose deploy ingress-nginx-controller -n ingress-nginx --name ingress-nginx-controller --port=80 --target-port=80 --type NodePort
+
+*****edit created svc and add port
+k edit svc ingress-nginx-controller -n ingress-nginx
+
+***creating ingress resource commandline in app space
+k create ingress ingress-wear-watch -n app-space --rule="/wear=wear-service:8080" --rule="/watch=video-service:8080"
+
+
+*****in appspace ingress annotations:
+
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false" -> if you see https getting redirected .  308 - requiredDuringScheduleingIgnoreDuringExecution
+
+
+
+###########Design a kubernetes cluster
+****kube-api -  can be active/active
+* kubectl points to the api on master port 6443  in kubeconfig
+* setup a loadbalancer to split traffic between the 2 master api's
+
+****scheduler - cannot be active/active.  need to be active/standby
+* leader election process happens to see which master is active
+****controllermanager - cannot be active/activer.  neet to be active/standby
+* leader election process happens to see which is active
+kube-controller-manager --leader-elect true.
+--leader-elect-lease duration 15s
+--leader-elect-renew-deadline 10s
+--leader-elect-retry-peropd 2s  -> if one process fails the other master will take over.
+* when controller started it tries to get a lockon endpoint kube controller manager. what ever master
+gets this first will run controller manager and be active. scheduler follows same process for determining who is active.
+
+       [LB]
+        |
+[ETCD/M] [ETCD/M]
+        |
+[worker]  [worker]
 
 
 
 
 
+******ETCD******************************************
+**operate etcd
+* ./etcdctl set key1 value1
+* ./etcdctl get key1
+* ./etdctl   -> help
+
+* what version etcdctl is configured to work with  ->  ./etcdctl --version
+* to use etcdctl:  ETCDCTL_API=3 ./etcdctl version
+
+ETCD - Commands (Optional)
+(Optional) Additional information about ETCDCTL Utility
+
+ETCDCTL is the CLI tool used to interact with ETCD.
+
+ETCDCTL can interact with ETCD Server using 2 API versions - Version 2 and Version 3.  By default its set to use Version 2. Each version has different sets of commands.
+
+For example ETCDCTL version 2 supports the following commands:
+
+etcdctl backup
+etcdctl cluster-health
+etcdctl mk
+etcdctl mkdir
+etcdctl set
+
+
+Whereas the commands are different in version 3
+
+etcdctl snapshot save 
+etcdctl endpoint health
+etcdctl get
+etcdctl put
+
+To set the right version of API set the environment variable ETCDCTL_API command
+
+export ETCDCTL_API=3
+
+
+
+When API version is not set, it is assumed to be set to version 2. And version 3 commands listed above don't work. When API version is set to version 3, version 2 commands listed above don't work.
+
+
+
+Apart from that, you must also specify path to certificate files so that ETCDCTL can authenticate to the ETCD API Server. The certificate files are available in the etcd-master at the following path. We discuss more about certificates in the security section of this course. So don't worry if this looks complex:
+
+--cacert /etc/kubernetes/pki/etcd/ca.crt     
+--cert /etc/kubernetes/pki/etcd/server.crt     
+--key /etc/kubernetes/pki/etcd/server.key
+
+
+So for the commands I showed in the previous video to work you must specify the ETCDCTL API version and path to certificate files. Below is the final form:
+
+
+
+kubectl exec etcd-master -n kube-system -- sh -c "ETCDCTL_API=3 etcdctl get / --prefix --keys-only --limit=10 --cacert /etc/kubernetes/pki/etcd/ca.crt --cert /etc/kubernetes/pki/etcd/server.crt  --key /etc/kubernetes/pki/etcd/server.key" 
+
+
+* 2 topolopgies. one where etcd runs on masters and the other where etcd runs on own servers
+* external ETCD Topology -> less risky . harder and more servers
+* stacked topology is when ETCD sits on master nodes
+* kube api server listes etcd servers to point at. 
+* all nodes and etcd cluster can read.  Only the master/leader can write.
+* etcd implments raft protocol Leader ellection
+* etcd on one node sends out question if it can be leader and election happens and it becomes leader.  The leader sends out notices regulary
+that it is still being the leader.
+* If the non leader nodes do not receive  a notifaction after a certain time they will start a re-election. new leader is found.
+* leader does the write and then replicates to non-leader nodes
+* a write is considered to be completed if it can write to the majority of nodes in the cluster. 
+* Quorum = N/2 + 1 -> min number of nodes for the cluster to function
+* example: quorum of 3 nodes is  3/2 + 1 = 2.5 = 2  (only whole numbers)
+* always recommended to have odd number of nodes in etcd cluster
+
+
+* Important Update: Kubernetes the Hard Way
+
+
+Installing Kubernetes the hard way can help you gain a better understanding of putting together the different components manually.
+
+An optional series on this is available at our youtube channel here:
+
+
+
+https://www.youtube.com/watch?v=uUupRagM7m0&list=PL2We04F3Y_41jYdadX55fdJplDvgNGENo
+
+
+
+The GIT Repo for this tutorial can be found here: https://github.com/mmumshad/kubernetes-the-hard-way
+
+
+**************Kubeadm install*****************
+
+The vagrant file used in the next video is available here:
+
+https://github.com/kodekloudhub/certified-kubernetes-administrator-course
+
+Here's the link to the documentation:
+
+https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
 
 
 
