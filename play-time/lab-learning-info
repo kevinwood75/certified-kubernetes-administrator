@@ -1,0 +1,141 @@
+git clone https://github.com/kevinwood75/certified-kubernetes-administrator-course.git
+cd /Users/kwood/projects/coding-repos/certified-kubernetes-administrator-course/kubeadm-clusters/virtualbox
+
+https://developer.hashicorp.com/vagrant/docs/cli/destroy
+
+vagrant up   -> build out vm as per vagrant file.
+vagreant status -> status of vm
+vagrant halt -> stops all vm specified in vagrant file "you use up to atart back up"
+vagrant destory -> removes the vm's 
+vagrant ssh -> connect to created vm
+
+
+	
+Vagrant Cloud is Moving
+Vagrant Cloud is moving to the HashiCorp Cloud Platform (HCP) as the Vagrant Box Registry. If you are a new user, please create an HCP account and continue to the HCP Vagrant Box Registry.
+
+Existing Vagrant Cloud users can still login below to manage or migrate their boxes.
+
+
+
+https://portal.cloud.hashicorp.com/services/vagrant/registries
+
+
+vagrant box registry:  https://portal.cloud.hashicorp.com/vagrant/discover?architectures=arm64&providers=virtualbox&query=ubuntu
+
+
+VBoxManage: error: Details: code NS_ERROR_FAILURE (0x80004005), component SessionMachine, interface ISession
+
+Multipass:
+https://canonical.com/multipass
+
+
+LAB:
+192.168.2.111  - controlplane
+192.168.2.112 - node01
+192.168.2.113 - node02
+
+
+https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
+
+
+https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/
+
+https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/high-availability/
+
+https://kubernetes.io/docs/setup/production-environment/container-runtimes/#cgroup-drivers
+
+https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/configure-cgroup-driver/
+
+################Installing kubernetes cluster#####################
+
+1) sudo mkdir -p -m 755 /etc/apt/keyrings
+2) curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+3) echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+4)  
+sudo apt-get update
+sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
+
+##################Creating a K8s cluster with kubeadm
+******on all nodes do the following
+root@node01:/# tee /etc/modules-load.d/containerd.conf <<EOF
+br_netfilter
+EOF
+
+modprobe br_netfilter
+
+tee /etc/sysctl.d/kubernetes.conf<<EOF
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.ipv4.ip_forward = 1
+EOF
+
+sysctl --system
+
+swapoff -a && sudo sed -i '/swap/d' /etc/fstab
+rm -f  swap.img
+********************************************************
+
+1) install container runtime
+apt update
+apt install -y containerd
+** 2 cgroup drivers are available.  cgroupfs and systemd.  Both container run time and kubelet need to set to same cgroup driver
+*** The cgroupfs driver is not recommended when systemd is the init system because systemd expects a single cgroup manager on the system. Additionally, if you use cgroup v2, use the systemd cgroup driver instead of cgroupfs
+2) verify if systemd is used ->  ps -p 1
+****In v1.22 and later, if the user does not set the cgroupDriver field under KubeletConfiguration, kubeadm defaults it to systemd.
+3) mkdir -p /etc/containerd
+4) spit out default containerd config ->  containerd config default
+5) create containd config:
+containerd config default | sed 's/SystemdCgroup = false/SystemdCgroup = true/' | tee /etc/containerd/config.toml
+6) restart containerd after config change -> systemctl restart containerd
+7) look at containerd config being used  ->  containerd config dump | grep -i systemdcgroup
+8) initialize on controlplane node:
+swapoff -a && sudo sed -i '/swap/d' /etc/fstab
+kubeadm init --apiserver-advertise-address 192.168.2.111 --pod-network-cidr "10.244.0.0/16" --upload-certs 
+
+
+kubeadm init --apiserver-advertise-address 192.18.84.12 --apiserver-cert-extra-sans controlplane --pod-network-cidr "10.244.0.0/16" --upload-certs 
+
+Your Kubernetes control-plane has initialized successfully!
+
+To start using your cluster, you need to run the following as a regular user:
+
+  mkdir -p $HOME/.kube
+  sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+  sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+Alternatively, if you are the root user, you can run:
+
+  export KUBECONFIG=/etc/kubernetes/admin.conf
+
+You should now deploy a pod network to the cluster.
+Run "kubectl apply -f [podnetwork].yaml" with one of the options listed at:
+  https://kubernetes.io/docs/concepts/cluster-administration/addons/
+
+Then you can join any number of worker nodes by running the following on each as root:
+
+kubeadm join 192.168.2.111:6443 --token 4f72x5.mysjrrmatnevnzzf \
+	--discovery-token-ca-cert-hash sha256:4446e41896e0853dd8f0189c75412c3d610e390cd872f9e3064d1d06bcf59c0b 
+
+
+9) create pod network
+   * decided on flannel
+
+   ****If you use custom podCIDR (not 10.244.0.0/16) you first need to download the above manifest and modify the network to match your one.
+   https://github.com/flannel-io/flannel#deploying-flannel-manually
+   kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
+
+
+
+
+
+10) join workers to controlplane
+kubeadm join 192.168.2.111:6443 --token 4f72x5.mysjrrmatnevnzzf \
+	--discovery-token-ca-cert-hash sha256:4446e41896e0853dd8f0189c75412c3d610e390cd872f9e3064d1d06bcf59c0b
