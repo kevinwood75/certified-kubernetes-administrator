@@ -1,0 +1,11 @@
+https://www.youtube.com/watch?v=-ovJrIIED88&list=PL2We04F3Y_41jYdadX55fdJplDvgNGENo&index=19
+
+1) instll go
+apt update
+apt install golang -y
+go version
+
+2) install kubetest locally
+go install k8s.io/test-infra/kubetest@latest
+
+

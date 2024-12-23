@@ -1,0 +1,121 @@
+
+#####Application Falure#########
+
+* kubectl logs web -f  -> current live logs
+* kubectl logs web -f --previous -> previvious logs
+
+* Troubleshooring app pods
+https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/
+
+
+1) app cannot connect to DB service
+
+* issue what mysql service name app pod used did not exist
+* deleted current mysql service and deploy new server with name mysql-service
+- controlplane /tmp ➜  kubectl edit svc mysql  -n alpha
+A copy of your changes has been stored to "/tmp/kubectl-edit-3319683989.yaml"
+error: At least one of apiVersion, kind and name was changed
+- controlplane /tmp ✖ kubectl delete svc mysql -n alpha
+service "mysql" deleted
+controlplane /tmp ✖ kubectl apply -f /tmp/kubectl-edit-3319683989.yaml
+
+2) getting connection to mysql refused from app
+* mysql service was was confirgured with wrong target port
+* kubectl edit svc mysql-service -n beta -> change to correct taget port 3306
+*** end point has port in it now
+controlplane ~ ➜  kubectl describe svc mysql-service  -n beta
+Name:                     mysql-service
+Namespace:                beta
+Labels:                   <none>
+Annotations:              <none>
+Selector:                 name=mysql
+Type:                     ClusterIP
+IP Family Policy:         SingleStack
+IP Families:              IPv4
+IP:                       10.43.183.16
+IPs:                      10.43.183.16
+Port:                     <unset>  3306/TCP
+TargetPort:               3306/TCP
+Endpoints:                10.42.0.11:3306
+Session Affinity:         None
+Internal Traffic Policy:  Cluster
+Events:                   <none>
+
+3) getting connection refused to mysql from app
+* issue is that mysqql service does not have the correct selector that matches label mysql pod is using.
+kubectl edit svc mysql-service -n gamma
+
+controlplane ~ ➜  kubectl describe svc mysql-service -n gamma
+Name:                     mysql-service
+Namespace:                gamma
+Labels:                   <none>
+Annotations:              <none>
+Selector:                 name=mysql
+Type:                     ClusterIP
+IP Family Policy:         SingleStack
+IP Families:              IPv4
+IP:                       10.43.30.204
+IPs:                      10.43.30.204
+Port:                     <unset>  3306/TCP
+TargetPort:               3306/TCP
+Endpoints:                10.42.0.13:3306
+Session Affinity:         None
+Internal Traffic Policy:  Cluster
+Events:                   <none>
+
+4)  getting access denied talking to the dataabase .
+* issue is the environment variable defining DB_USER in webapp pod is not using correct username
+kubectl edit deployment webapp-mysql -n delta
+
+controlplane ~ ➜  kubectl describe deployment webapp-mysql -n delta
+Name:                   webapp-mysql
+Namespace:              delta
+CreationTimestamp:      Mon, 23 Dec 2024 21:23:04 +0000
+Labels:                 name=webapp-mysql
+Annotations:            deployment.kubernetes.io/revision: 2
+Selector:               name=webapp-mysql
+Replicas:               1 desired | 1 updated | 1 total | 1 available | 0 unavailable
+StrategyType:           RollingUpdate
+MinReadySeconds:        0
+RollingUpdateStrategy:  25% max unavailable, 25% max surge
+Pod Template:
+  Labels:  name=webapp-mysql
+  Containers:
+   webapp-mysql:
+    Image:      mmumshad/simple-webapp-mysql
+    Port:       8080/TCP
+    Host Port:  0/TCP
+    Environment:
+      DB_Host:      mysql-service
+      DB_User:      root
+      DB_Password:  paswrd
+
+
+5) getting access denied in talking to mysql from webapp
+** 2 things wrong
+* db_user was not set to correct user in web app pod environment variables
+* evironment variable setting password on mysql pod was not correct
+Environment:
+      MYSQL_ROOT_PASSWORD:  paswrd
+
+kubectl edit deployments -n epsilon -> change db-user on webapp
+kubectl edit pod mysql -n epsilon
+kubectl apply -f /tmp/kubectl-edit-1969819909.yaml
+
+6) cannot reach webapp ui
+* using wrong node port in webapp-service
+** after being able to connect to webapp was getting access denied talking to database
+kubectl edit deployments -n zeta
+deployment.apps/webapp-mysql edited
+
+
+controlplane ~ ➜  kubectl edit pod mysql -n zeta
+error: pods "mysql" is invalid
+A copy of your changes has been stored to "/tmp/kubectl-edit-693358918.yaml"
+error: Edit cancelled, no valid changes were saved.
+
+controlplane ~ ✖ kubectl delete pod mysql -n zeta
+pod "mysql" deleted
+
+controlplane ~ ➜  kubectl apply -f /tmp/kubectl-edit-693358918.yaml -n zeta
+pod/mysql created
