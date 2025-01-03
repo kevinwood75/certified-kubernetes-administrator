@@ -32,6 +32,7 @@ https://canonical.com/multipass
 
 LAB:
 192.168.2.111  - controlplane
+192.168.2.110 - controlplane02
 192.168.2.112 - node01
 192.168.2.113 - node02
 

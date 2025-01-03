@@ -1,0 +1,143 @@
+***********************JSON/YAML***************************
+************YAML:***********************
+**key value pair
+Fruit: Apple  
+
+**array/list
+Fruits:
+-  orange
+- Apple
+
+**Dictionary
+Banana:
+    Calories: 105
+    Fat: 0.4 g
+
+* Dictionary - Unordered
+* List - Ordered
+
+
+************************************JSON path***********************************
+$ -> root of document
+
+**critera query with json
+array -> $[?( @ > 40 )]   -> "@ = each item in the list" 
+**other opperators
+@ == 40
+@ != 40
+@ in [40,43,45]
+@ nin [40,43,45]   -> nin  = not in.
+$.car.wheels[?( @.location == "rear-right")].model
+
+{
+    "employee": {
+        "name": "john",
+        "gender": "male",
+        "age": 24,
+        "address": {
+            "city": "edison",
+            "state": "new jersey",
+            "country": "united states"
+        },
+        "payslips": [
+            {
+                "month": "june",
+                "amount": 1400
+            },
+            {
+                "month": "july",
+                "amount": 2400
+            },
+            {
+                "month": "august",
+                "amount": 3400
+            }
+        ]
+    }
+}
+
+cat q9.json | jpath $.employee.payslips[?(@.month == 'august')]
+
+*****use "*" to get all key values
+$.*.color
+
+*****use $[*].model  to get all list objects
+
+
+cat q9.json | jpath $.prizes[?(@.year == "2014")].laureates[*].firstname
+
+cat q9.json | jpath $.prizes[*].laureates[?(@.id == "939")].firstname
+cat q9.json | jpath $.prizes[*].laureates[?(@.id == "913" || @.id == "914")].firstname
+
+**Advanced options with lists**
+$[0] -> first element
+$[3] -> 4th element
+$[0,3] -> 1st and 4th element
+$[0:3] -> !st to 4th element (does not include the 4th element)
+$[0:4] -> includes 4th element
+$[-1:] -> returns last element
+$[-3:] -> last three elements
+
+***********************Using jpath in kubernetes*************************
+
+kubectl get pods -o json -> develop jsonpath query using this
+kubectl get pods -o=jsonpath='{.items[0].spec.containers[0].image}'
+
+kubectl get nodes -o=jsonpath='{.items[*].metadata.name}'
+kubectl get nodes -o=jsonpath='{.items[*].status.nodeInfo.architecture}'
+kubectl get nodes -o=jsonpath='{.items[*].status.capacity.cpu}'
+**merg queries
+kubectl get nodes -o=jsonpath='{.items[*].status.capacity.cpu}{"\n"}{.items[*].status.nodeInfo.architecture}'
+
+**pretty formating
+kubectl get nodes -o=jsonpath='{.items[*].status.capacity.cpu}{"\n"}{.items[*].status.nodeInfo.architecture}'
+
+**Loops - Range
+kubectl get nodes -o=jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.capacity.cpu}{"\n"}{end}'
+
+**Custom Columns
+kubectl get nodes -o=custom-columns=NODE:.metadata.name, CPU:.status.capacity.cpu
+
+**sort objects with jsonpath
+kubectl get nodes --sort-by= .metadata.name
+kubectl get nodes --sort-by= .status.capacity.cpu
+
+kubectl get pods -o json -> to get json output
+
+kubectl get pods -o=jsonpath='{.items[0].spec.containers[0].image}'
+** kubectl add the $ for root automatically so its not manditory.
+
+kubectl get nodes -o=jsonpath='{.items[*].metadata.name}'
+** returns node names
+
+kubectl get nodes -o=jsonpath='{.items[*].status.nodeInfo.architecture}'
+** returns the type of cpu
+
+kubectl get nodes -o=jsonpath='{.items[*].status.capacity.cpu}'
+**cpu count
+
+kubectl get nodes -o=jsonpath='{.items[*].metadata.name}{.items[*].status.capacity.cpu}'
+**merge 2 query togethor
+
+{"\n"}  -> new line
+{"\t"}  -> Tab
+
+kubectl get nodes -o=jsonpath='{.items[*].metadata.name}{"\n"}{.items[*].status.capacity.cpu}'
+
+kubectl config view --kubeconfig=/root/my-kube-config
+
+kubectl config view --kubeconfig=/root/my-kube-config -o jsonpath='{.users[*].name}' > /opt/outputs/users.txt
+
+kubectl get pv --sort-by='{.spec.capacity.storage}' -o=custom-columns='NAME:.metadata.name, CAPACITY:.spec.capacity.storage'
+
+kubectl get pv --sort-by=.spec.capacity.storage -o=custom-columns=NAME:.metadata.name,CAPACITY:.spec.capacity.storage > /opt/outputs/pv-and-capacity-sorted.txt
+
+kubectl config view --kubeconfig=/root/my-kube-config -o jsonpath="{.contexts[?(@.context.user=='aws-user')].name}"
+
+
+
+
+
+
+
+
