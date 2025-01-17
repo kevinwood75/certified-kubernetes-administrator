@@ -428,8 +428,48 @@ ETCDCTL_API=3 sudo etcdctl --endpoints=192.168.2.111:2379 --cacert /etc/kubernet
 +----------+----------+------------+------------+
 
 
-**** adding another controler plane to cluster.
+**** adding another controler plane to cluster***************************
+sudo kubeadm join 192.168.2.213:6443 --token 2l36sg.h3mpxhplgzngdwoi \
+	--discovery-token-ca-cert-hash sha256:c86917e89701dc7c202764131d737412c339604999435c116667a8f3eb46a009 \
+	--control-plane --certificate-key 0465e13cefb6e34182875b57581a2e2e4a2d25576fb642aa10b70c0ab4376720
 
+join new controller to cluster after installing and setting up.  you may need to regenerate key depending how much time has passed
+
+*************************************************************************
+
+
+##########setting up k8s external loadbalancer#################
+create a nginx loadbalancer:
+https://cloudinfrastructureservices.co.uk/nginx-load-balancing/
+
+apt-get install nginx -y
+systemctl start nginx 
+systemctl enable nginx
+################################/etc/nginx/conf.d/loadbalancer.conf#################################
+upstream backend {
+	server 192.168.2.112:30008;
+	server 192.168.2.113:30008;
+   }
+
+   server {
+       listen	80;
+       server_name 192.168.2.213;
+
+
+       location / {
+	   proxy_redirect	off;
+	   proxy_set_header	X-Real-IP $remote_addr;
+	   proxy_set_header	X-Forward-For $proxy_add_x_forwarded_for;
+	   proxy_set_header	Host $http_host;
+       proxy_pass http://backend;
+    }
+
+}  
+#####################################################################################################
+
+
+
+############setting up nginx ingress controller#########################
 
 
 
