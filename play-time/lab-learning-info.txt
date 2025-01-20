@@ -182,7 +182,8 @@ kubeadm join 192.168.2.111:6443 --token 4f72x5.mysjrrmatnevnzzf \
    192.168.2.109 - controlplane03
    192.168.2.112 - node01
    192.168.2.113 - node02
-
+   192.168.2.108 - node-rasp01
+https://linuxconfig.org/setting-a-static-ip-address-in-ubuntu-24-04-via-the-command-line
 https://github.com/kubernetes/kubeadm/blob/main/docs/ha-considerations.md#options-for-software-load-balancing
 
 
@@ -467,6 +468,11 @@ upstream backend {
 }  
 #####################################################################################################
 
+!!!!! adding new worker node to k8s a while after initial build!!!!!!!!!!!!!!!!
+**** if you get 'Retrying due to error: could not find a JWS signature in the cluster-info ConfigMap for token ID "2l36sg"' when running
+sudo kubeadm join 192.168.2.213:6443 --token 2l36sg.h3mpxhplgzngdwoi --discovery-token-ca-cert-hash sha256:c86917e89701dc7c202764131d737412c339604999435c116667a8f3eb46a009 --v=5
+**** do  "sudo kubeadm token create 2l36sg.h3mpxhplgzngdwoi" from controller to re set it and then try join again.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
 ############setting up nginx ingress controller#########################
