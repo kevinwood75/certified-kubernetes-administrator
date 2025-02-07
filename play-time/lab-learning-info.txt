@@ -509,7 +509,14 @@ job.batch/ingress-nginx-admission-patch created
 ingressclass.networking.k8s.io/nginx created
 validatingwebhookconfiguration.admissionregistration.k8s.io/ingress-nginx-admission created
 
+ssl pass through:
+https://arunsworld.medium.com/ssl-passthrough-via-kubernetes-ingress-b3eaf3c7c9da
 
+
+      listen  443 ssl;
+       server_name *.apexkube.xyz
+
+30459
 
 1)  create a namespace to deploy ingress-controller
     kubectl create namespace ingress-space
@@ -655,6 +662,11 @@ spec:
 
 #############################################
 
+
+###############creating a self signed cert for app nginx
+https://www.humankode.com/ssl/create-a-selfsigned-certificate-for-nginx-in-5-minutes/
+https://betterstack.com/community/questions/getting-chrome-to-accept-self-signed-localhost-certificate/
+#########################################################
 
 https://medium.com/@martin.hodges/simple-service-for-testing-kubernetes-configurations-189e9409b776
 https://sam-thomas.medium.com/kubernetes-ingressclass-error-ingress-does-not-contain-a-valid-ingressclass-78aab72c15a6
