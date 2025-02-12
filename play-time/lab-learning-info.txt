@@ -187,16 +187,25 @@ sudo systemctl restart ntp
 sudo systemctl status ntp
 TZ='America/Toronto'; export TZ
 
+
+
+
+
+
   LAB infra:
    192.168.2.213 - loadbalancer xx
    192.168.2.111  - controlplane xx
    192.168.2.110 - controlplane02 xx
    192.168.2.114 - controlplane03 xx
-   192.168.2.112 - node01 xx
-   192.168.2.113 - node02 xx
+   192.168.2.112 - node01 xx 
+   192.168.2.113 - node02 xx x
    192.168.2.108 - node-rasp01 xx
 https://linuxconfig.org/setting-a-static-ip-address-in-ubuntu-24-04-via-the-command-line
 https://github.com/kubernetes/kubeadm/blob/main/docs/ha-considerations.md#options-for-software-load-balancing
+
+Increase diskspace:
+lvresize -L +8G /dev/ubuntu-vg/ubuntu-lv
+resize2fs /dev/ubuntu-vg/ubuntu-lv
 
 
 -------------------------------Load balancer setup----------------------------
@@ -672,3 +681,294 @@ https://medium.com/@martin.hodges/simple-service-for-testing-kubernetes-configur
 https://sam-thomas.medium.com/kubernetes-ingressclass-error-ingress-does-not-contain-a-valid-ingressclass-78aab72c15a6
 https://github.com/kubernetes/ingress-nginx/blob/main/docs/troubleshooting.md
 https://kubernetes.io/docs/reference/kubectl/generated/kubectl_create/kubectl_create_ingress/
+
+
+
+#########################Building a 3 node Ceph cluster#############################
+Nodes in ceph cluster:
+192.168.2.213 - loadbalancer (lvm created) 
+192.168.2.110 - controlplane02
+192.168.2.114 - controlplane03 
+
+Adding disk to node:
+cd /var/lib/libvirt/images
+sudo qemu-img create -f raw loadbalancer-disk2-20G 20G
+sudo chown libvirt-qemu:kvm loadbalancer-disk2-20G
+sudo qemu-img create -f raw controlplane02-disk2-20G 20G
+sudo chown libvirt-qemu:kvm controlplane02-disk2-20G
+sudo qemu-img create -f raw controlplane03-disk2-20G 20G
+sudo chown libvirt-qemu:kvm controlplane03-disk2-20G
+
+sudo qemu-img create -f raw controlplane01-disk2-20G 20G
+sudo chown libvirt-qemu:kvm controlplane01-disk2-20G
+sudo qemu-img create -f raw node01-disk2-20G 20G
+sudo chown libvirt-qemu:kvm node01-disk2-20G
+sudo qemu-img create -f raw node02-disk2-20G 20G
+sudo chown libvirt-qemu:kvm node02-disk2-20G
+**********ATTACH DISK to VM*********************
+sudo virsh attach-disk loadbalancer \
+--source /var/lib/libvirt/images/loadbalancer-disk2-20G \
+--target vdb \
+--persistent
+
+sudo virsh attach-disk controlplane02 \
+--source /var/lib/libvirt/images/controlplane02-disk2-20G \
+--target vdb \
+--persistent
+
+sudo virsh attach-disk controlplane03 \
+--source /var/lib/libvirt/images/controlplane03-disk2-20G \
+--target vdb \
+--persistent
+
+sudo virsh attach-disk controlplane01 \
+--source /var/lib/libvirt/images/controlplane01-disk2-20G \
+--target vdb \
+--persistent
+
+sudo virsh attach-disk node01 \
+--source /var/lib/libvirt/images/node01-disk2-20G \
+--target vdb \
+--persistent
+
+sudo virsh attach-disk node02 \
+--source /var/lib/libvirt/images/node02-disk2-20G \
+--target vdb \
+--persistent
+
+************************************************
+
+**************DETACH DISK**********************
+sudo virsh detach-disk loadbalancer \
+/var/lib/libvirt/images/loadbalancer-disk2-20G \
+--persistent \
+--config \
+--live
+**********************************************
+
+Once physical disk is attached create logical volume(leave raw):  ---> !!!!!!!!Not needed ceph can do this!!!!!!!!!!!!!
+sudo pvcreate /dev/vdb
+sudo vgcreate loadbalancer_vg /dev/vdb
+sudo vgcreate controlplane02_vg /dev/vdb
+sudo vgcreate controlplane03_vg /dev/vdb
+sudo lvcreate -l +100%FREE -n loadbalancer_vol1 loadbalancer_vg
+sudo lvcreate -l +100%FREE -n controlplane02_vol1 controlplane02_vg
+sudo lvcreate -l +100%FREE -n controlplane03_vol1 controlplane03_vg
+
+ --- Logical volume ---
+  LV Path                /dev/loadbalancer_vg/loadbalancer_vol1
+  LV Name                loadbalancer_vol1
+  VG Name                loadbalancer_vg
+
+*****************remove lvm**************************
+lvremove /dev/loadbalancer_vg/loadbalancer_vol1
+vgremove loadbalancer_vg
+pvremove /dev/vdb
+*****************************************************
+
+**************Uninstall cifs on all nodes:**************************
+systemctl stop ceph-mon.target
+systemctl stop ceph-mgr.target
+systemctl stop ceph-mds.target
+systemctl stop ceph-osd.target
+rm -rf /etc/systemd/system/ceph*
+killall -9 ceph-mon ceph-mgr ceph-mds
+rm -rf /var/lib/ceph/mon/  /var/lib/ceph/mgr/  /var/lib/ceph/mds/
+pveceph purge
+apt purge ceph-mon ceph-osd ceph-mgr ceph-mds
+apt purge ceph-base ceph-mgr-modules-core
+rm -rf /etc/ceph/*
+rm -rf /etc/pve/ceph.conf
+rm -rf /etc/pve/priv/ceph.*
+********************************************************************
+
+
+
+******************create ceph cluster****************************
+https://www.server-world.info/en/note?os=Ubuntu_24.04&p=ceph&f=1
+https://medium.com/@kayvan.sol2/install-ceph-cluster-by-cephadm-169829ebf531
+
+
+Generating a dashboard self-signed certificate...
+Creating initial admin user...
+Fetching dashboard port number...
+Ceph Dashboard is now available at:
+
+	     URL: https://loadbalancer:8443/
+	    User: admin
+	Password: 123456
+
+Enabling client.admin keyring and conf on hosts with "admin" label
+Saving cluster configuration to /var/lib/ceph/19492a45-e7e7-11ef-82db-5254000002cb/config directory
+You can access the Ceph CLI as following in case of multi-cluster or non-default config:
+
+	sudo /usr/sbin/cephadm shell --fsid 19492a45-e7e7-11ef-82db-5254000002cb -c /etc/ceph/ceph.conf -k /etc/ceph/ceph.client.admin.keyring
+
+Or, if you are only running a single cluster on this host:
+
+	sudo /usr/sbin/cephadm shell 
+
+Please consider enabling telemetry to help improve Ceph:
+
+	ceph telemetry on
+
+For more information see:
+
+	https://docs.ceph.com/en/latest/mgr/telemetry/
+
+Bootstrap complete.
+
+
+root@loadbalancer:~# cephadm shell --fsid 19492a45-e7e7-11ef-82db-5254000002cb
+Inferring config /var/lib/ceph/19492a45-e7e7-11ef-82db-5254000002cb/mon.loadbalancer/config
+This is a development version of cephadm.
+For information regarding the latest stable release:
+    https://docs.ceph.com/docs/squid/cephadm/install
+root@loadbalancer:/# 
+*************************************************************************************
+#############################Installing Rook#########################################
+https://youtu.be/IGj__IRc7J8?si=_X8FX6ws3daawP1G
+https://rook.io/docs/rook/latest-release/Getting-Started/intro/
+https://youtu.be/98QujsS7jFI?si=UhLH5bd7YcQnjxcN
+
+****************************Removing rook********************************************
+sudo kubectl delete all --all -n rook-ceph
+sudo kubectl api-resources --verbs=list --namespaced -o name | xargs -n 1 sudo kubectl get --show-kind --ignore-not-found -n rook-ceph
+
+!!!!!!!!!operator.yaml change!!!!!!!!!!!!!!!
+ROOK_ENABLE_DISCOVERY_DAEMON: "true"   -> automatically detects newly added disks
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!cluster.yaml change!!!!!!!!!!!!!!!
+provider: host    -> so cephs cluster is available outside of k8s cluster
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!Get admin password!!!!!!!!!!!!!!!
+sudo kubectl -n rook-ceph get secret rook-ceph-dashboard-password -o jsonpath="{['data']['password']}" | base64 --decode && echo
+b7!r=-|SJ(F!JQjOT+.K
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!Launch UI cephs!!!!!!!!!!!!!!!!!!
+kubectl port-forward svc/rook-ceph-mgr-dashboard -n rook-ceph 31515:8443
+https://127.0.0.1:31515
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!Connect to toolbox to ceph cli!!!!!!!!!!!!!!!
+kubectl -n rook-ceph exec -it deploy/rook-ceph-tools -- bash
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!! Testing my new ceph rook storage !!!!!!!
+*****cat storageclass-woodez.yaml********
+apiVersion: ceph.rook.io/v1
+kind: CephBlockPool
+metadata:
+  name: replicapool
+  namespace: rook-ceph # namespace:cluster
+spec:
+  failureDomain: osd
+  replicated:
+    size: 1
+    # Disallow setting pool with replica 1, this could lead to data loss without recovery.
+    # Make sure you're *ABSOLUTELY CERTAIN* that is what you want
+    requireSafeReplicaSize: false
+    # gives a hint (%) to Ceph in terms of expected consumption of the total cluster capacity of a given pool
+    # for more info: https://docs.ceph.com/docs/master/rados/operations/placement-groups/#specifying-expected-pool-size
+    #targetSizeRatio: .5
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: rook-ceph-block
+provisioner: rook-ceph.rbd.csi.ceph.com # csi-provisioner-name
+parameters:
+  # clusterID is the namespace where the rook cluster is running
+  # If you change this namespace, also change the namespace below where the secret namespaces are defined
+  clusterID: rook-ceph # namespace:cluster
+
+  # If you want to use erasure coded pool with RBD, you need to create
+  # two pools. one erasure coded and one replicated.
+  # You need to specify the replicated pool here in the `pool` parameter, it is
+  # used for the metadata of the images.
+  # The erasure coded pool must be set as the `dataPool` parameter below.
+  #dataPool: ec-data-pool
+  pool: replicapool
+
+  # RBD image format. Defaults to "2".
+  imageFormat: "2"
+
+  # RBD image features. Available for imageFormat: "2". CSI RBD currently supports only `layering` feature.
+  imageFeatures: layering
+
+  # The secrets contain Ceph admin credentials. These are generated automatically by the operator
+  # in the same namespace as the cluster.
+  csi.storage.k8s.io/provisioner-secret-name: rook-csi-rbd-provisioner
+  csi.storage.k8s.io/provisioner-secret-namespace: rook-ceph # namespace:cluster
+  csi.storage.k8s.io/controller-expand-secret-name: rook-csi-rbd-provisioner
+  csi.storage.k8s.io/controller-expand-secret-namespace: rook-ceph # namespace:cluster
+  csi.storage.k8s.io/node-stage-secret-name: rook-csi-rbd-node
+  csi.storage.k8s.io/node-stage-secret-namespace: rook-ceph # namespace:cluster
+  # Specify the filesystem type of the volume. If not specified, csi-provisioner
+  # will set default as `ext4`.
+  csi.storage.k8s.io/fstype: ext4
+# uncomment the following to use rbd-nbd as mounter on supported nodes
+#mounter: rbd-nbd
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+
+*************cat test-volumeclaim.yaml************** 
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: woodez-claim
+  namespace: woodez
+spec:
+  accessModes:
+     - ReadWriteOnce
+  storageClassName: rook-ceph-block
+  resources:
+     requests:
+       storage: 500Mi
+
+***************cat test-pod.yaml********************
+apiVersion: v1
+kind: Pod
+metadata:
+  name: brook-test
+  namespace: woodez
+spec:
+  containers:
+    - name: myfrontend
+      image: nginx
+      volumeMounts:
+      - mountPath: "/var/www/html"
+        name: mypd
+  volumes:
+    - name: mypd
+      persistentVolumeClaim:
+        claimName: woodez-claim
+
+Kevins-MacBook-Air:storageclass kwood$ kubectl get sc
+NAME              PROVISIONER                  RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
+rook-ceph-block   rook-ceph.rbd.csi.ceph.com   Delete          Immediate           true                   79m
+
+
+Kevins-MacBook-Air:storageclass kwood$ kubectl get persistentvolumeclaim -n woodez
+NAME           STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS      VOLUMEATTRIBUTESCLASS   AGE
+woodez-claim   Bound    pvc-5cfcb0d4-cb3b-4662-bff7-41b4a23aa0bf   500Mi      RWO            rook-ceph-block   <unset>                 17m
+
+kubectl -n woodez exec -it brook-test -- bash
+root@brook-test:/# cd /var/www/html/
+root@brook-test:/var/www/html# df -k .
+Filesystem     1K-blocks  Used Available Use% Mounted on
+/dev/rbd0         469328    14    465218   1% /var/www/html
+root@brook-test:/var/www/html# df -h .
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/rbd0       459M   14K  455M   1% /var/www/html
+
+
+
+
+
+
+
+
