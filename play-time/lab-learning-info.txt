@@ -830,6 +830,7 @@ root@loadbalancer:/#
 https://youtu.be/IGj__IRc7J8?si=_X8FX6ws3daawP1G
 https://rook.io/docs/rook/latest-release/Getting-Started/intro/
 https://youtu.be/98QujsS7jFI?si=UhLH5bd7YcQnjxcN
+https://www.server-world.info/en/note?os=Ubuntu_24.04&p=ceph&f=2
 
 ****************************Removing rook********************************************
 sudo kubectl delete all --all -n rook-ceph
@@ -964,6 +965,174 @@ Filesystem     1K-blocks  Used Available Use% Mounted on
 root@brook-test:/var/www/html# df -h .
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/rbd0       459M   14K  455M   1% /var/www/html
+
+#############################################################Installing mysql on woodez k8s####################################################
+
+1) install helm on MacBook
+https://helm.sh/docs/intro/install/
+https://argo-cd.readthedocs.io/en/stable/user-guide/helm/
+brew install helm
+
+helm create <name>                      # Creates a chart directory along with the common files and directories used in a chart.
+helm package <chart-path>               # Packages a chart into a versioned chart archive file.
+helm lint <chart>                       # Run tests to examine a chart and identify possible issues:
+helm show all <chart>                   # Inspect a chart and list its contents:
+helm show values <chart>                # Displays the contents of the values.yaml file
+helm pull <chart>                       # Download/pull chart 
+helm pull <chart> --untar=true          # If set to true, will untar the chart after downloading it
+helm pull <chart> --verify              # Verify the package before using it
+helm pull <chart> --version <number>    # Default-latest is used, specify a version constraint for the chart version to use
+helm dependency list <chart>            # Display a list of a chart’s dependencies:
+
+helm install <name> <chart>                           # Install the chart with a name
+helm install <name> <chart> --namespace <namespace>   # Install the chart in a specific namespace
+helm install <name> <chart> --set key1=val1,key2=val2 # Set values on the command line (can specify multiple or separate values with commas)
+helm install <name> <chart> --values <yaml-file/url>  # Install the chart with your specified values
+helm install <name> <chart> --dry-run --debug         # Run a test installation to validate chart (p)
+helm install <name> <chart> --verify                  # Verify the package before using it 
+helm install <name> <chart> --dependency-update       # update dependencies if they are missing before installing the chart
+helm uninstall <name>                                 # Uninstall a release
+
+helm upgrade <release> <chart>                            # Upgrade a release
+helm upgrade <release> <chart> --atomic                   # If set, upgrade process rolls back changes made in case of failed upgrade.
+helm upgrade <release> <chart> --dependency-update        # update dependencies if they are missing before installing the chart
+helm upgrade <release> <chart> --version <version_number> # specify a version constraint for the chart version to use
+helm upgrade <release> <chart> --values                   # specify values in a YAML file or a URL (can specify multiple)
+helm upgrade <release> <chart> --set key1=val1,key2=val2  # Set values on the command line (can specify multiple or separate valuese)
+helm upgrade <release> <chart> --force                    # Force resource updates through a replacement strategy
+helm rollback <release> <revision>                        # Roll back a release to a specific revision
+helm rollback <release> <revision>  --cleanup-on-fail     # Allow deletion of new resources created in this rollback when rollback fails
+
+helm repo add <repo-name> <url>   # Add a repository from the internet:
+helm repo list                    # List added chart repositories
+helm repo update                  # Update information of available charts locally from chart repositories
+helm repo remove <repo_name>      # Remove one or more chart repositories
+helm repo index <DIR>             # Read the current directory and generate an index file based on the charts found.
+helm repo index <DIR> --merge     # Merge the generated index with an existing index file
+helm search repo <keyword>        # Search repositories for a keyword in charts
+helm search hub <keyword>         # Search for charts in the Artifact Hub or your own hub instance
+
+helm list                       # Lists all of the releases for a specified namespace, uses current namespace context if namespace not specified
+helm list --all                 # Show all releases without any filter applied, can use -a
+helm list --all-namespaces      # List releases across all namespaces, we can use -A
+helm list -l key1=value1,key2=value2 # Selector (label query) to filter on, supports '=', '==', and '!='
+helm list --date                # Sort by release date
+helm list --deployed            # Show deployed releases. If no other is specified, this will be automatically enabled
+helm list --pending             # Show pending releases
+helm list --failed              # Show failed releases
+helm list --uninstalled         # Show uninstalled releases (if 'helm uninstall --keep-history' was used)
+helm list --superseded          # Show superseded releases
+helm list -o yaml               # Prints the output in the specified format. Allowed values: table, json, yaml (default table)
+helm status <release>           # This command shows the status of a named release.
+helm status <release> --revision <number>   # if set, display the status of the named release with revision
+helm history <release>          # Historical revisions for a given release.
+helm env                        # Env prints out all the environment information in use by Helm.
+
+helm get all <release>      # A human readable collection of information about the notes, hooks, supplied values, and generated manifest file of the given release.
+helm get hooks <release>    # This command downloads hooks for a given release. Hooks are formatted in YAML and separated by the YAML '---\n' separator.
+helm get manifest <release> # A manifest is a YAML-encoded representation of the Kubernetes resources that were generated from this release's chart(s). If a chart is dependent on other charts, those resources will also be included in the manifest.
+helm get notes <release>    # Shows notes provided by the chart of a named release.
+helm get values <release>   # Downloads a values file for a given release. use -o to format output
+
+helm plugin install <path/url1>     # Install plugins
+helm plugin list                    # View a list of all installed plugins
+helm plugin update <plugin>         # Update plugins
+helm plugin uninstall <plugin>      # Uninstall a plugin
+
+
+2) install mysql test
+https://8grams.medium.com/how-to-install-database-mysql-and-postgresql-on-kubernetes-the-better-way-d9524d710be8
+
+a) kubectl create namespace woodez-database
+
+b) Kevins-MacBook-Air:woodez-database kwood$ cat database-volumeclaim.yaml 
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: database-claim
+  namespace: woodez-database
+spec:
+  accessModes:
+     - ReadWriteMany
+  storageClassName: rook-ceph-block
+  resources:
+     requests:
+       storage: 10Gi
+
+Kevins-MacBook-Air:woodez-database kwood$ kubectl apply -f database-volumeclaim.yaml
+persistentvolumeclaim/database-claim created
+Kevins-MacBook-Air:woodez-database kwood$ kubectl get pvc -n woodez-database
+NAME             STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS      VOLUMEATTRIBUTESCLASS   AGE
+database-claim   Bound    pvc-ee66b0f7-44cb-4028-913b-cfc1e27434fd   10Gi       RWO            rook-ceph-block   <unset>                 6s
+
+
+helm install mysql -f mysql-values.yaml bitnami/mysql -n woodez-database
+
+
+Kevins-MacBook-Air:woodez-database kwood$ helm install mysql -f mysql-values.yaml bitnami/mysql -n woodez-database
+NAME: mysql
+LAST DEPLOYED: Thu Feb 13 11:51:50 2025
+NAMESPACE: woodez-database
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+NOTES:
+CHART NAME: mysql
+CHART VERSION: 12.2.2
+APP VERSION: 8.4.4
+
+Did you know there are enterprise versions of the Bitnami catalog? For enhanced secure software supply chain features, unlimited pulls from Docker, LTS support, or application customization, see Bitnami Premium or Tanzu Application Catalog. See https://www.arrow.com/globalecs/na/vendors/bitnami for more information.
+
+** Please be patient while the chart is being deployed **
+
+Tip:
+
+  Watch the deployment status using the command: kubectl get pods -w --namespace woodez-database
+
+Services:
+
+  echo Primary: mysql.woodez-database.svc.cluster.local:3306
+
+Execute the following to get the administrator credentials:
+
+  echo Username: root
+  MYSQL_ROOT_PASSWORD=$(kubectl get secret --namespace woodez-database mysql -o jsonpath="{.data.mysql-root-password}" | base64 -d)
+
+To connect to your database:
+
+  1. Run a pod that you can use as a client:
+
+      kubectl run mysql-client --rm --tty -i --restart='Never' --image  docker.io/bitnami/mysql:8.0.32 --namespace woodez-database --env MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD --command -- bash
+
+  2. To connect to primary service (read/write):
+
+      mysql -h mysql.woodez-database.svc.cluster.local -uroot -p"$MYSQL_ROOT_PASSWORD"
+
+
+
+
+
+WARNING: Rolling tag detected (bitnami/mysql:8.0.32), please note that it is strongly recommended to avoid using rolling tags in a production environment.
++info https://techdocs.broadcom.com/us/en/vmware-tanzu/application-catalog/tanzu-application-catalog/services/tac-doc/apps-tutorials-understand-rolling-tags-containers-index.html
+
+WARNING: There are "resources" sections in the chart not set. Using "resourcesPreset" is not recommended for production. For production installations, please set the following values according to your workload needs:
+  - primary.resources
+  - secondary.resources
+  - volumePermissions.resources
++info https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+
+⚠ SECURITY WARNING: Original containers have been substituted. This Helm chart was designed, tested, and validated on multiple platforms using a specific set of Bitnami and Tanzu Application Catalog containers. Substituting other containers is likely to cause degraded security and performance, broken chart features, and missing environment variables.
+
+Substituted images detected:
+  - docker.io/bitnami/mysql:8.0.32
+
+⚠ WARNING: Original containers have been retagged. Please note this Helm chart was tested, and validated on multiple platforms using a specific set of Tanzu Application Catalog containers. Substituting original image tags could cause unexpected behavior.
+
+Retagged images:
+  - docker.io/bitnami/mysql:8.0.32
+
+
+
 
 
 
