@@ -199,7 +199,7 @@ TZ='America/Toronto'; export TZ
    192.168.2.114 - controlplane03 xx
    192.168.2.112 - node01 xx 
    192.168.2.113 - node02 xx x
-   192.168.2.108 - node-rasp01 xx
+   192.168.2.108 - node03 xx
 https://linuxconfig.org/setting-a-static-ip-address-in-ubuntu-24-04-via-the-command-line
 https://github.com/kubernetes/kubeadm/blob/main/docs/ha-considerations.md#options-for-software-load-balancing
 
@@ -492,7 +492,13 @@ upstream backend {
 !!!!! adding new worker node to k8s a while after initial build!!!!!!!!!!!!!!!!
 **** if you get 'Retrying due to error: could not find a JWS signature in the cluster-info ConfigMap for token ID "2l36sg"' when running
 sudo kubeadm join 192.168.2.213:6443 --token 2l36sg.h3mpxhplgzngdwoi --discovery-token-ca-cert-hash sha256:c86917e89701dc7c202764131d737412c339604999435c116667a8f3eb46a009 --v=5
-**** do  "sudo kubeadm token create 2l36sg.h3mpxhplgzngdwoi" from controller to re set it and then try join again.
+**** recreate token and retry join
+kubeadm token create
+i2w6gn.kgbl77drj3ro70kb
+kwood@controlplane:~$ kubeadm token list
+TOKEN                     TTL         EXPIRES                USAGES                   DESCRIPTION   EXTRA GROUPS
+i2w6gn.kgbl77drj3ro70kb   23h         2025-02-17T16:43:53Z   authentication,signing   <none>    system:bootstrappers:kubeadm:default-node-token
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
@@ -692,15 +698,14 @@ Nodes in ceph cluster:
 
 Adding disk to node:
 cd /var/lib/libvirt/images
-sudo qemu-img create -f raw loadbalancer-disk2-20G 20G
-sudo chown libvirt-qemu:kvm loadbalancer-disk2-20G
 sudo qemu-img create -f raw controlplane02-disk2-20G 20G
 sudo chown libvirt-qemu:kvm controlplane02-disk2-20G
 sudo qemu-img create -f raw controlplane03-disk2-20G 20G
 sudo chown libvirt-qemu:kvm controlplane03-disk2-20G
-
-sudo qemu-img create -f raw controlplane01-disk2-20G 20G
-sudo chown libvirt-qemu:kvm controlplane01-disk2-20G
+sudo qemu-img create -f raw loadbalancer-disk2-20G 20G
+sudo chown libvirt-qemu:kvm loadbalancer-disk2-20G
+sudo qemu-img create -f raw node03-disk2-20G 20G
+sudo chown libvirt-qemu:kvm node03-disk2-20G
 sudo qemu-img create -f raw node01-disk2-20G 20G
 sudo chown libvirt-qemu:kvm node01-disk2-20G
 sudo qemu-img create -f raw node02-disk2-20G 20G
@@ -736,11 +741,23 @@ sudo virsh attach-disk node02 \
 --target vdb \
 --persistent
 
+sudo virsh attach-disk node03 \
+--source /var/lib/libvirt/images/node03-disk2-20G \
+--target vdb \
+--persistent
+
+
 ************************************************
 
 **************DETACH DISK**********************
 sudo virsh detach-disk loadbalancer \
 /var/lib/libvirt/images/loadbalancer-disk2-20G \
+--persistent \
+--config \
+--live
+
+sudo virsh detach-disk node03 \
+/var/lib/libvirt/images/node03-disk2-40G \
 --persistent \
 --config \
 --live
@@ -1132,6 +1149,10 @@ Retagged images:
   - docker.io/bitnami/mysql:8.0.32
 
 
+************remove not ready node from k8s cluster****************************
+kubectl drain --ignore-daemonsets node-rasp01
+kubectl delete node node-rasp01
+******************************************************************************
 
 
 
