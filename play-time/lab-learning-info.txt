@@ -198,8 +198,13 @@ TZ='America/Toronto'; export TZ
    192.168.2.110 - controlplane02 xx
    192.168.2.114 - controlplane03 xx
    192.168.2.112 - node01 xx 
-   192.168.2.113 - node02 xx x
+   192.168.2.113 - node02 xx x -> decommed
+   192.168.2.107 - node02-woodez -> decommed
    192.168.2.108 - node03 xx
+   192.168.2.109 - node04
+   192.168.2.115 - node05
+
+
 https://linuxconfig.org/setting-a-static-ip-address-in-ubuntu-24-04-via-the-command-line
 https://github.com/kubernetes/kubeadm/blob/main/docs/ha-considerations.md#options-for-software-load-balancing
 
@@ -706,10 +711,13 @@ sudo qemu-img create -f raw loadbalancer-disk2-20G 20G
 sudo chown libvirt-qemu:kvm loadbalancer-disk2-20G
 sudo qemu-img create -f raw node03-disk2-20G 20G
 sudo chown libvirt-qemu:kvm node03-disk2-20G
+sudo qemu-img create -f raw node04-disk2-20G 20G
+sudo chown libvirt-qemu:kvm node04-disk2-20G
+
 sudo qemu-img create -f raw node01-disk2-20G 20G
 sudo chown libvirt-qemu:kvm node01-disk2-20G
-sudo qemu-img create -f raw node02-disk2-20G 20G
-sudo chown libvirt-qemu:kvm node02-disk2-20G
+sudo qemu-img create -f raw node02-woodez-disk2-20G 20G
+sudo chown libvirt-qemu:kvm node02-woodez-disk2-20G
 **********ATTACH DISK to VM*********************
 sudo virsh attach-disk loadbalancer \
 --source /var/lib/libvirt/images/loadbalancer-disk2-20G \
@@ -736,8 +744,8 @@ sudo virsh attach-disk node01 \
 --target vdb \
 --persistent
 
-sudo virsh attach-disk node02 \
---source /var/lib/libvirt/images/node02-disk2-20G \
+sudo virsh attach-disk node02-woodez \
+--source /var/lib/libvirt/images/node02-woodez-disk2-20G \
 --target vdb \
 --persistent
 
@@ -746,6 +754,10 @@ sudo virsh attach-disk node03 \
 --target vdb \
 --persistent
 
+sudo virsh attach-disk node04 \
+--source /var/lib/libvirt/images/node04-disk2-20G \
+--target vdb \
+--persistent
 
 ************************************************
 
@@ -758,6 +770,12 @@ sudo virsh detach-disk loadbalancer \
 
 sudo virsh detach-disk node03 \
 /var/lib/libvirt/images/node03-disk2-40G \
+--persistent \
+--config \
+--live
+
+sudo virsh detach-disk node02-woodez \
+/var/lib/libvirt/images/node02-woodez-disk2-20G \
 --persistent \
 --config \
 --live
@@ -804,7 +822,7 @@ rm -rf /etc/pve/priv/ceph.*
 ******************create ceph cluster****************************
 https://www.server-world.info/en/note?os=Ubuntu_24.04&p=ceph&f=1
 https://medium.com/@kayvan.sol2/install-ceph-cluster-by-cephadm-169829ebf531
-
+https://rook.io/docs/rook/latest/Storage-Configuration/Advanced/ceph-osd-mgmt/ -> OSD MANAGEMENT
 
 Generating a dashboard self-signed certificate...
 Creating initial admin user...
@@ -1086,9 +1104,9 @@ database-claim   Bound    pvc-ee66b0f7-44cb-4028-913b-cfc1e27434fd   10Gi       
 helm install mysql -f mysql-values.yaml bitnami/mysql -n woodez-database
 
 
-Kevins-MacBook-Air:woodez-database kwood$ helm install mysql -f mysql-values.yaml bitnami/mysql -n woodez-database
+Kevins-MacBook-Air:woodez-database-mysql kwood$ helm install mysql -f mysql-values.yaml bitnami/mysql -n woodez-database
 NAME: mysql
-LAST DEPLOYED: Thu Feb 13 11:51:50 2025
+LAST DEPLOYED: Wed Feb 19 11:12:18 2025
 NAMESPACE: woodez-database
 STATUS: deployed
 REVISION: 1
@@ -1147,7 +1165,6 @@ Substituted images detected:
 
 Retagged images:
   - docker.io/bitnami/mysql:8.0.32
-
 
 ************remove not ready node from k8s cluster****************************
 kubectl drain --ignore-daemonsets node-rasp01
