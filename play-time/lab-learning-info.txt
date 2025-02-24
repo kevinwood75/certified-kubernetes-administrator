@@ -198,8 +198,6 @@ TZ='America/Toronto'; export TZ
    192.168.2.110 - controlplane02 xx
    192.168.2.114 - controlplane03 xx
    192.168.2.112 - node01 xx 
-   192.168.2.113 - node02 xx x -> decommed
-   192.168.2.107 - node02-woodez -> decommed
    192.168.2.108 - node03 xx
    192.168.2.109 - node04
    192.168.2.115 - node05
@@ -849,7 +847,7 @@ Please consider enabling telemetry to help improve Ceph:
 
 For more information see:
 
-	https://docs.ceph.com/en/latest/mgr/telemetry/
+	https://docs.ceph.com/en/lfatest/mgr/telemetry/
 
 Bootstrap complete.
 
