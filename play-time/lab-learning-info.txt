@@ -1170,6 +1170,40 @@ kubectl delete node node-rasp01
 ########################k8s resource########################################################################
 https://thenewstack.io/kubernetes-gets-a-new-resource-orchestrator-in-the-form-of-kro/
 https://kro.run/docs/overview
+https://kro.run/docs/getting-started/Installation/
+
+Installing kro
+
+Kevins-MacBook-Air:Garbage-Collection kwood$ export KRO_VERSION=$(curl -sL \
+>     https://api.github.com/repos/kro-run/kro/releases/latest | \
+>     jq -r '.tag_name | ltrimstr("v")'
+>   )
+
+Kevins-MacBook-Air:Garbage-Collection kwood$ echo $KRO_VERSION
+0.2.1
+
+Kevins-MacBook-Air:Garbage-Collection kwood$ helm install kro oci://ghcr.io/kro-run/kro/kro \
+>   --namespace kro \
+>   --create-namespace \
+>   --version=${KRO_VERSION}
+Pulled: ghcr.io/kro-run/kro/kro:0.2.1
+Digest: sha256:2fb565bc9ecfdbd5885047ecc6611924d56ce17129d674cb818f091a818534c9
+NAME: kro
+LAST DEPLOYED: Fri Mar  7 11:20:14 2025
+NAMESPACE: kro
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+
+Kevins-MacBook-Air:Garbage-Collection kwood$ helm -n kro list
+NAME	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART    	APP VERSION
+kro 	kro      	1       	2025-03-07 11:20:14.038513 -0500 EST	deployed	kro-0.2.1	0.2.1      
+
+Kevins-MacBook-Air:Garbage-Collection kwood$ kubectl get pods -n kro
+NAME                   READY   STATUS    RESTARTS   AGE
+kro-86787cd5bf-dzzgp   1/1     Running   0          36s
+
+
 ############################################################################################################
 
 
