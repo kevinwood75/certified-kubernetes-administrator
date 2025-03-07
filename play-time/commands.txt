@@ -2499,6 +2499,11 @@ Here's the link to the documentation:
 https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
 
 
+#################Getting API versions of K8s cluster ##################################'
+kubectl api-versions
+
+Kevins-MacBook-Air:Garbage-Collection kwood$ kubectl api-versions | grep batch
+batch/v1
 
 
 
